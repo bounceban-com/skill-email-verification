@@ -1,5 +1,5 @@
 ---
-name: BounceBan
+name: email-verification
 description: Verify email addresses with the BounceBan API. Single and bulk email verification specializing in catch-all (accept-all) and SEG-protected emails, fast email/domain checks (free/disposable/role), credits and rate-limit management, and webhooks. Use when the user asks to verify emails, clean an email list, check deliverability, or detect disposable/free/role addresses.
 version: 1.0.0
 metadata:
