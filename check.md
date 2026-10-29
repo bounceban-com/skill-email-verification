@@ -55,8 +55,7 @@ curl "https://api.bounceban.com/v1/check?email=sales@example.com" \
 | HTTP status | Meaning |
 | --- | --- |
 | `400` | Invalid parameter. |
-| `401` | Authorization missing or invalid. |
-| `403` | Insufficient credits. |
-| `405` | Account blocked. |
+| `401` | API key missing or invalid, IP address not whitelisted, or account blocked - see `msg`. A disabled or expired key also returns `401`, with `error` set to `api_key_disabled` or `api_key_expired`; an account whose email has not been verified gets `error: account_not_activated`. |
+| `403` | Insufficient Check Plan credits. API key quotas do not apply to this endpoint. |
 | `429` | Rate limited. |
 | `500` | Unexpected error. |

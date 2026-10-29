@@ -7,7 +7,7 @@ A [Claude Code](https://claude.com/claude-code) / agent skill for verifying emai
 Once installed, the agent can:
 
 - **Verify a single email** — synchronously (waterfall endpoint, waits up to 80 s) or asynchronously (submit, then poll or receive a webhook).
-- **Verify email lists in bulk** — up to ~500k emails per task via JSON, or a CSV file up to 25 MB; poll progress, fetch paginated results, or export to a CSV download link.
+- **Verify email lists in bulk** — up to ~500k emails per task via JSON, or a CSV file up to 25 MB; poll progress, fetch paginated results, export to a CSV download link, or stop a running task (credits for unverified emails are refunded).
 - **Run quick checks** — free / disposable / role / syntax detection without an SMTP handshake (`GET /v1/check`).
 - **Manage the account** — check credit balance and live rate limits (`GET /v1/account`).
 - **Handle webhooks** — payload formats and event types for async notifications.
@@ -63,7 +63,7 @@ SKILL.md                              # Entry point: endpoint routing table, qui
 references/
   introduction.md                     # Auth, credits, result enums, rate limits
   single-verification.md              # Sync (waterfall) and async single verification
-  bulk-verification.md                # Bulk tasks: create, status, dump, export, destroy
+  bulk-verification.md                # Bulk tasks: create, status, dump, export, stop, destroy
   check.md                            # Fast free/disposable/role/syntax check (no SMTP)
   account.md                          # Credits balance and rate limits
   webhooks.md                         # Webhook payloads and event types
