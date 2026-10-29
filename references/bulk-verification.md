@@ -5,7 +5,7 @@ Verify a list of emails as an asynchronous task. Typical flow:
 1. Create a task: `POST /v1/verify/bulk` (JSON list) or `POST /v1/verify/bulk/file` (CSV upload) -> returns task `id`.
 2. Track progress: `GET /v1/verify/bulk/status` (or `url_finished` webhook).
 3. Get results: `GET /v1/verify/bulk/dump` (JSON), `POST /v1/verify/bulk/emails` (specific emails), or `POST /v1/verify/bulk/export` (CSV download link).
-4. Optionally delete: `POST /v1/verify/bulk/destroy`.
+4. Optionally stop a running task: `POST /v1/verify/bulk/stop`, or delete a finished one: `POST /v1/verify/bulk/destroy`.
 
 All endpoints use base URL `https://api.bounceban.com` and the `Authorization: YOUR_API_KEY` header.
 
@@ -107,6 +107,8 @@ GET https://api.bounceban.com/v1/verify/bulk/status?id=TASK_ID
 | `deliverable_count` / `undeliverable_count` / `risky_count` / `unknown_count` / `catchall_count` | integer | Result counts; only when `finished`. |
 | `credits_consumed` | float | Only when `finished`. |
 | `credits_remaining` | float | Only when `finished`. `-1` means unlimited. |
+| `stopped` | boolean | Only present (`true`) when the task was stopped via `POST /v1/verify/bulk/stop` or the web app. |
+| `not_verified_count` | integer | Stopped tasks only, when `finished`: emails that got no result (not submitted, or given up when the task was stopped). Not charged. |
 
 ### Example
 
@@ -114,6 +116,8 @@ GET https://api.bounceban.com/v1/verify/bulk/status?id=TASK_ID
 curl "https://api.bounceban.com/v1/verify/bulk/status?id=6374973d2307debafb85a58d" \
   -H "Authorization: YOUR_API_KEY"
 ```
+
+Finished task:
 
 ```json
 {
@@ -126,6 +130,37 @@ curl "https://api.bounceban.com/v1/verify/bulk/status?id=6374973d2307debafb85a58
   "unknown_count": 0,
   "credits_consumed": 2.0,
   "credits_remaining": 14973.0
+}
+```
+
+Task being stopped (after `POST /v1/verify/bulk/stop`, until the emails still being verified finish or 60 seconds pass):
+
+```json
+{
+  "id": "6374973d2307debafb85a58d",
+  "status": "verifying",
+  "stopped": true,
+  "total_count": 39609,
+  "finished_count": 1210
+}
+```
+
+Stopped task:
+
+```json
+{
+  "id": "6374973d2307debafb85a58d",
+  "status": "finished",
+  "stopped": true,
+  "total_count": 1933,
+  "not_verified_count": 37676,
+  "deliverable_count": 1749,
+  "undeliverable_count": 179,
+  "risky_count": 5,
+  "unknown_count": 0,
+  "catchall_count": 667,
+  "credits_consumed": 1933.0,
+  "credits_remaining": 99104.0
 }
 ```
 
@@ -176,6 +211,8 @@ curl -X POST "https://api.bounceban.com/v1/verify/bulk/emails" \
 ```
 
 `result` is `ok` on success, `err` if the task hasn't finished yet.
+
+For a stopped task, emails that got no result are returned with `"status": "canceled"` (not verified, not charged).
 
 ---
 
@@ -284,6 +321,69 @@ curl -X POST "https://api.bounceban.com/v1/verify/bulk/export" \
 
 ---
 
+## Stop a bulk task
+
+```
+POST https://api.bounceban.com/v1/verify/bulk/stop
+Content-Type: application/json
+```
+
+Stops a queued or verifying task that belongs to your account. Results already returned are kept.
+
+- **Queued task:** stopped immediately. No email is verified and all credits charged for the task are refunded.
+- **Verifying task:** emails not yet submitted are not verified. Emails already being verified get up to **60 seconds** to finish; after that they are given up, and any result that arrives later is **not** returned (no webhook, not in `dump`/`emails`/`export`). When the task finishes, credits for every email without a result are refunded.
+- The task finishes (and the `url_finished` webhook is sent) as soon as all emails being verified finish, or after 60 seconds, whichever comes first.
+- Calling stop again on a stopping/stopped task is safe and returns `result: ok`.
+
+### Body parameters
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | Yes | Bulk task ID. |
+
+### Example
+
+```bash
+curl -X POST "https://api.bounceban.com/v1/verify/bulk/stop" \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"id": "6374973d2307debafb85a58d"}'
+```
+
+Verifying task (being stopped):
+
+```json
+{
+  "result": "ok",
+  "id": "6374973d2307debafb85a58d",
+  "status": "verifying",
+  "stopped": true,
+  "msg": "The task is being stopped. Emails not yet submitted will not be verified, and emails still being verified will be given up to 60 seconds to finish. Credits for all unverified emails will be refunded when the task finishes."
+}
+```
+
+Queued task, or a task that has already been stopped:
+
+```json
+{
+  "result": "ok",
+  "id": "6374973d2307debafb85a58d",
+  "status": "finished",
+  "stopped": true,
+  "msg": "The task has been stopped. Credits for all unverified emails have been refunded."
+}
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `result` | string | `ok` when the task is stopping or stopped. |
+| `status` | string | `verifying` while stopping, `finished` once stopped. Poll `GET /v1/verify/bulk/status` until `finished`. |
+| `stopped` | boolean | Always `true` on success. |
+
+Returns `400` if the task is not queued or verifying (for example still importing, or already finished).
+
+---
+
 ## Delete a bulk task
 
 ```
@@ -319,8 +419,7 @@ curl -X POST "https://api.bounceban.com/v1/verify/bulk/destroy" \
 | HTTP status | Meaning |
 | --- | --- |
 | `400` | Invalid parameter. |
-| `401` | Authorization missing or invalid. |
-| `403` | Insufficient credits (`credits_required`, `credits_remaining`, `message` in body). |
-| `405` | Account blocked. |
+| `401` | API key missing or invalid, IP address not whitelisted, or account blocked - see `msg`. A disabled or expired key also returns `401`, with `error` set to `api_key_disabled` or `api_key_expired`; an account whose email has not been verified gets `error: account_not_activated`. |
+| `403` | Insufficient credits (`credits_required`, `credits_remaining` in body), or the API key reached its daily or monthly quota (`error: api_key_quota_exceeded`, plus `quota_period` and `quota_resets_at`). A task that needs more than what is left is rejected as a whole. |
 | `429` | Rate limited. |
 | `500` | Unexpected error. |

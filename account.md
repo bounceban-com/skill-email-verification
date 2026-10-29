@@ -49,7 +49,6 @@ Need a higher rate limit? Fill out https://forms.gle/3De4UMZKpxPiPv5M8 or email 
 
 | HTTP status | Meaning |
 | --- | --- |
-| `401` | Authorization missing or invalid. |
-| `405` | Account blocked. |
+| `401` | API key missing or invalid, IP address not whitelisted, or account blocked - see `msg`. A disabled or expired key also returns `401`, with `error` set to `api_key_disabled` or `api_key_expired`; an account whose email has not been verified gets `error: account_not_activated`. |
 | `429` | Rate limited. |
 | `500` | Unexpected error. |

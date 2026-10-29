@@ -81,3 +81,32 @@ A JSON **array** (one event per verified email):
   "credits_remaining": 1483505.176
 }
 ```
+
+For a task stopped via `POST /v1/verify/bulk/stop` (or the web app), `status` is still `finished` and two extra fields are included:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `stopped` | boolean | `true`. |
+| `not_verified_count` | integer | Emails that got no result (not submitted, or given up when the task was stopped). Their credits are refunded. |
+
+Example payload of a stopped task:
+
+```json
+{
+  "id": "68b167c5d10abc82d391f13f",
+  "status": "finished",
+  "stopped": true,
+  "total_count": 1933,
+  "not_verified_count": 37676,
+  "pushed_count": 1933,
+  "deliverable_count": 1749,
+  "risky_count": 5,
+  "undeliverable_count": 179,
+  "unknown_count": 0,
+  "catchall_count": 667,
+  "credits_consumed": 1933.0,
+  "credits_remaining": 99104.0
+}
+```
+
+A stopped task sends this event as soon as all emails still being verified finish, or 60 seconds after the stop request, whichever comes first.
